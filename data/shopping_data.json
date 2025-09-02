@@ -1,0 +1,115 @@
+{
+    "users": {
+        "1756836373133": {
+            "shopping_list": [],
+            "history": [],
+            "preferences": {}
+        }
+    },
+    "products": {
+        "dairy": [
+            "milk",
+            "cheese",
+            "yogurt",
+            "butter",
+            "eggs"
+        ],
+        "produce": [
+            "apples",
+            "bananas",
+            "oranges",
+            "lettuce",
+            "tomatoes",
+            "carrots"
+        ],
+        "bakery": [
+            "bread",
+            "bagels",
+            "croissants",
+            "muffins"
+        ],
+        "meat": [
+            "chicken",
+            "beef",
+            "fish",
+            "pork"
+        ],
+        "snacks": [
+            "chips",
+            "cookies",
+            "crackers",
+            "popcorn"
+        ],
+        "beverages": [
+            "water",
+            "soda",
+            "juice",
+            "coffee",
+            "tea"
+        ],
+        "frozen": [
+            "ice cream",
+            "frozen pizza",
+            "frozen vegetables"
+        ],
+        "household": [
+            "paper towels",
+            "toilet paper",
+            "cleaning supplies"
+        ]
+    },
+    "substitutes": {
+        "milk": [
+            "almond milk",
+            "soy milk",
+            "oat milk",
+            "coconut milk"
+        ],
+        "bread": [
+            "whole wheat bread",
+            "rye bread",
+            "gluten-free bread"
+        ],
+        "butter": [
+            "margarine",
+            "olive oil",
+            "coconut oil"
+        ],
+        "eggs": [
+            "tofu",
+            "applesauce",
+            "commercial egg replacer"
+        ],
+        "sugar": [
+            "honey",
+            "maple syrup",
+            "stevia"
+        ]
+    },
+    "seasonal_items": {
+        "winter": [
+            "hot chocolate",
+            "soup",
+            "stuffing",
+            "cranberries"
+        ],
+        "spring": [
+            "asparagus",
+            "strawberries",
+            "spinach",
+            "peas"
+        ],
+        "summer": [
+            "watermelon",
+            "corn",
+            "berries",
+            "grill supplies"
+        ],
+        "fall": [
+            "pumpkin",
+            "apples",
+            "squash",
+            "cinnamon"
+        ]
+    }
+}

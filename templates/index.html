@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Voice Command Shopping Assistant</title>
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='css/style.css') }}"
+    />
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <h1>Voice Command Shopping Assistant</h1>
+        <p>
+          Manage your shopping list with voice commands and get smart
+          suggestions
+        </p>
+      </div>
+
+      <div class="voice-control">
+        <h2>Voice Control</h2>
+        <button id="mic-button" class="mic-button">🎤</button>
+        <p id="status">Click the microphone to speak</p>
+
+        <div class="response">
+          <p id="response-text">
+            Say something like "Add milk to my shopping list" or "What's on my
+            list?"
+          </p>
+        </div>
+
+        <div class="text-input">
+          <input
+            type="text"
+            id="command-input"
+            placeholder="Or type your command here..."
+          />
+          <button id="text-command">Send</button>
+        </div>
+      </div>
+
+      <div class="shopping-list">
+        <h2>
+          Shopping List
+          <button id="clear-list" class="clear-button">Clear List</button>
+        </h2>
+        <div id="shopping-list-container" class="loading">Loading...</div>
+      </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/script.js') }}"></script>
+  </body>
+</html>
