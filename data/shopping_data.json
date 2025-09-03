@@ -4,6 +4,84 @@
             "shopping_list": [],
             "history": [],
             "preferences": {}
+        },
+        "1756838718668": {
+            "shopping_list": [],
+            "history": [],
+            "preferences": {}
+        },
+        "1756839221726": {
+            "shopping_list": [],
+            "history": [],
+            "preferences": {}
+        },
+        "1756839649271": {
+            "shopping_list": [
+                {
+                    "name": "milk",
+                    "quantity": 1,
+                    "category": "dairy",
+                    "added_on": "2025-09-03T00:31:21.095388"
+                }
+            ],
+            "history": [],
+            "preferences": {}
+        },
+        "1756839861017": {
+            "shopping_list": [],
+            "history": [],
+            "preferences": {}
+        },
+        "1756840037473": {
+            "shopping_list": [],
+            "history": [],
+            "preferences": {}
+        },
+        "1756840315190": {
+            "shopping_list": [
+                {
+                    "name": "milk",
+                    "quantity": 1,
+                    "category": "dairy",
+                    "added_on": "2025-09-03T00:42:05.056366"
+                },
+                {
+                    "name": "yoghurt",
+                    "quantity": 1,
+                    "category": "uncategorized",
+                    "added_on": "2025-09-03T00:42:23.495401"
+                }
+            ],
+            "history": [],
+            "preferences": {}
+        },
+        "1756840604007": {
+            "shopping_list": [],
+            "history": [],
+            "preferences": {}
+        },
+        "1756876669772": {
+            "shopping_list": [],
+            "history": [],
+            "preferences": {}
+        },
+        "1756877163214": {
+            "shopping_list": [
+                {
+                    "name": "apples",
+                    "quantity": 1,
+                    "category": "produce",
+                    "added_on": "2025-09-03T10:56:07.405558"
+                },
+                {
+                    "name": "oranges",
+                    "quantity": 1,
+                    "category": "produce",
+                    "added_on": "2025-09-03T10:56:35.776443"
+                }
+            ],
+            "history": [],
+            "preferences": {}
         }
     },
     "products": {

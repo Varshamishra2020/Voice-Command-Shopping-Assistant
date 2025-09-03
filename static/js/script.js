@@ -9,12 +9,11 @@ document.addEventListener("DOMContentLoaded", function () {
   );
   const clearListButton = document.getElementById("clear-list");
 
+  let recognition = null;
   let isListening = false;
 
-  // Initialize shopping list
   loadShoppingList();
 
-  // Voice command handler
   micButton.addEventListener("click", function () {
     if (isListening) {
       stopListening();
@@ -23,7 +22,6 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   });
 
-  // Text command handler
   textCommandButton.addEventListener("click", function () {
     const command = commandInput.value.trim();
     if (command) {
@@ -32,7 +30,6 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   });
 
-  // Clear list handler
   clearListButton.addEventListener("click", function () {
     if (confirm("Are you sure you want to clear your shopping list?")) {
       fetch("/clear-list", {
@@ -46,7 +43,6 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   });
 
-  // Enter key for text input
   commandInput.addEventListener("keypress", function (e) {
     if (e.key === "Enter") {
       textCommandButton.click();
@@ -54,26 +50,48 @@ document.addEventListener("DOMContentLoaded", function () {
   });
 
   function startListening() {
-    isListening = true;
-    micButton.classList.add("listening");
-    statusText.textContent = "Listening...";
+    if (
+      !("webkitSpeechRecognition" in window || "SpeechRecognition" in window)
+    ) {
+      alert("Sorry, your browser does not support speech recognition.");
+      return;
+    }
 
-    fetch("/voice-command", {
-      method: "POST",
-    })
-      .then((response) => response.json())
-      .then((data) => {
-        showResponse(data.response);
-        loadShoppingList();
-        stopListening();
-      })
-      .catch((error) => {
-        showResponse("Error: " + error.message);
-        stopListening();
-      });
+    const SpeechRecognition =
+      window.SpeechRecognition || window.webkitSpeechRecognition;
+
+    recognition = new SpeechRecognition();
+    recognition.lang = "en-US";
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+
+    recognition.onstart = () => {
+      isListening = true;
+      micButton.classList.add("listening");
+      statusText.textContent = "Listening...";
+    };
+
+    recognition.onresult = (event) => {
+      const command = event.results[0][0].transcript;
+      showResponse("Heard: " + command);
+      sendTextCommand(command);
+    };
+
+    recognition.onerror = (event) => {
+      showResponse("Error: " + event.error);
+    };
+
+    recognition.onend = () => {
+      stopListening();
+    };
+
+    recognition.start();
   }
 
   function stopListening() {
+    if (recognition) {
+      recognition.stop();
+    }
     isListening = false;
     micButton.classList.remove("listening");
     statusText.textContent = "Click the microphone to speak";
@@ -98,7 +116,6 @@ document.addEventListener("DOMContentLoaded", function () {
         showResponse("Error: " + error.message);
       });
   }
-
   function showResponse(text) {
     responseText.textContent = text;
   }
@@ -111,6 +128,8 @@ document.addEventListener("DOMContentLoaded", function () {
       })
       .catch((error) => {
         console.error("Error loading shopping list:", error);
+        shoppingListContainer.innerHTML =
+          '<div class="empty-list">Error loading shopping list</div>';
       });
   }
 
@@ -121,7 +140,6 @@ document.addEventListener("DOMContentLoaded", function () {
       return;
     }
 
-    // Group items by category
     const categories = {};
     items.forEach((item) => {
       if (!categories[item.category]) {
@@ -152,7 +170,6 @@ document.addEventListener("DOMContentLoaded", function () {
 
     shoppingListContainer.innerHTML = html;
 
-    // Add event listeners to remove buttons
     document.querySelectorAll(".remove-button").forEach((button) => {
       button.addEventListener("click", function () {
         const itemName = this.getAttribute("data-item");

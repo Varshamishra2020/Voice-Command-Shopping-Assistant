@@ -2,6 +2,10 @@ import os
 import json
 import threading
 import time
+import io
+import re
+import wave
+import struct
 from datetime import datetime
 from flask import Flask, render_template, request, jsonify, session
 import speech_recognition as sr
@@ -11,17 +15,32 @@ import nltk
 from nltk.tokenize import word_tokenize
 from nltk.corpus import stopwords
 import random
+import base64
 
-# Download NLTK data
-nltk.download('punkt')
-nltk.download('stopwords')
+try:
+    nltk.data.find('tokenizers/punkt')
+except LookupError:
+    nltk.download('punkt')
+    
+try:
+    nltk.data.find('corpora/stopwords')
+except LookupError:
+    nltk.download('stopwords')
 
 app = Flask(__name__)
-app.secret_key = 'your-secret-key-here'  # Change this in production
+app.secret_key = os.urandom(24)  
 
-# Initialize shopping data
+NUMBER_WORDS = {
+    "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
+    "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10,
+    "a": 1, "an": 1
+}
+
 def init_shopping_data():
     data_file = 'data/shopping_data.json'
+    if not os.path.exists('data'):
+        os.makedirs('data')
+        
     if not os.path.exists(data_file):
         data = {
             "users": {},
@@ -49,7 +68,6 @@ def init_shopping_data():
                 "fall": ["pumpkin", "apples", "squash", "cinnamon"]
             }
         }
-        os.makedirs('data', exist_ok=True)
         with open(data_file, 'w') as f:
             json.dump(data, f, indent=4)
     
@@ -58,7 +76,6 @@ def init_shopping_data():
 
 shopping_data = init_shopping_data()
 
-# Initialize user session
 def init_user_session():
     if 'user_id' not in session:
         session['user_id'] = str(int(time.time() * 1000))
@@ -76,94 +93,194 @@ def save_shopping_data():
     with open('data/shopping_data.json', 'w') as f:
         json.dump(shopping_data, f, indent=4)
 
-# Speech recognition function
-def recognize_speech():
-    recognizer = sr.Recognizer()
-    microphone = sr.Microphone()
+def parse_quantity(text):
+    m = re.search(r"(\d+)", text)
+    if m:
+        return int(m.group(1))
+    for w, v in NUMBER_WORDS.items():
+        if w in text:
+            return v
+    return 1
+
+def parse_command(command):
+    c = command.lower()
     
-    with microphone as source:
-        print("Listening...")
-        recognizer.adjust_for_ambient_noise(source)
-        audio = recognizer.listen(source, timeout=5, phrase_time_limit=5)
+    qty = parse_quantity(c)
+    
+    if "add" in c or "buy" in c or "need" in c or "want" in c:
+        intent = "add"
+    elif "remove" in c or "delete" in c or "drop" in c:
+        intent = "remove"
+    elif "show" in c or "list" in c or "what's on" in c:
+        intent = "show"
+    elif "find" in c or "search" in c or "look for" in c:
+        intent = "find"
+    elif "suggest" in c or "recommend" in c:
+        intent = "suggest"
+    elif "clear" in c or "empty" in c:
+        intent = "clear"
+    else:
+        intent = "unknown"
+    
+    item = None
+    
+    for category, products in shopping_data['products'].items():
+        for product in products:
+            if product in c:
+                item = product
+                break
+        if item:
+            break
+    
+    if not item:
+        command_words = ["add", "remove", "delete", "buy", "get", "need", "want", 
+                         "show", "list", "find", "search", "for", "my", "the", "shopping", "list"]
+        words = [word for word in c.split() if word not in command_words and word not in NUMBER_WORDS]
+        if words:
+            item = words[-1]
+    
+    price_filter = None
+    m = re.search(r"(under|below|less than)\s*\$?\s*([\d\.]+)", c)
+    if m:
+        price_filter = float(m.group(2))
+    
+    return intent, item, qty, price_filter
+
+def convert_audio_to_wav(audio_data):
+    try:
+        if isinstance(audio_data, str) and audio_data.startswith('data:audio/webm;base64,'):
+            audio_data = audio_data.split(',')[1]
+        
+        audio_bytes = base64.b64decode(audio_data)
+
+        tmp_input = "temp_input.webm"
+        tmp_output = "temp_output.wav"
+
+        with open(tmp_input, "wb") as f:
+            f.write(audio_bytes)
+
+        os.system(f"ffmpeg -i {tmp_input} -ar 16000 -ac 1 {tmp_output} -y")
+
+        with open(tmp_output, "rb") as f:
+            wav_data = f.read()
+
+        os.remove(tmp_input)
+        os.remove(tmp_output)
+
+        return wav_data
+    except Exception as e:
+        print(f"Audio conversion error: {e}")
+        return None
+
+def recognize_speech(audio_data=None):
+    recognizer = sr.Recognizer()
     
     try:
+        if audio_data:
+            try:
+                wav_data = convert_audio_to_wav(audio_data)
+                if wav_data:
+                    with sr.AudioFile(io.BytesIO(wav_data)) as source:
+                        audio = recognizer.record(source)
+                    text = recognizer.recognize_google(audio)
+                    print(f"Recognized: {text}")
+                    return text.lower()
+            except Exception as e:
+                print(f"Audio data processing failed: {e}")
+                
+                pass
+        
+        with sr.Microphone() as source:
+            print("Adjusting for ambient noise...")
+            recognizer.adjust_for_ambient_noise(source, duration=1)
+            print("Listening...")
+            audio = recognizer.listen(source, timeout=5, phrase_time_limit=5)
+        
+        print("Processing speech...")
         text = recognizer.recognize_google(audio)
         print(f"Recognized: {text}")
         return text.lower()
-    except sr.UnknownValueError:
-        return "Sorry, I didn't understand that."
-    except sr.RequestError:
-        return "Sorry, there was an error with the speech service."
     except sr.WaitTimeoutError:
-        return "Sorry, I didn't hear anything."
+        return "timeout"
+    except sr.UnknownValueError:
+        return "unknown"
+    except sr.RequestError as e:
+        print(f"Speech recognition error: {e}")
+        return "error"
+    except Exception as e:
+        print(f"Speech recognition failed: {e}")
+        return "Please check your microphone and try again."
 
-# Text-to-speech function
 def text_to_speech(text):
-    tts = gTTS(text=text, lang='en')
-    filename = f"static/audio/{int(time.time())}.mp3"
-    os.makedirs(os.path.dirname(filename), exist_ok=True)
-    tts.save(filename)
-    playsound.playsound(filename)
-    os.remove(filename)  # Clean up after playing
+    try:
+        tts = gTTS(text=text, lang='en')
+        filename = f"audio_{int(time.time())}.mp3"
+        os.makedirs('audio', exist_ok=True)
+        filepath = os.path.join('audio', filename)
+        tts.save(filepath)
+        playsound.playsound(filepath)
+        threading.Thread(target=cleanup_audio, args=(filepath,)).start()
+    except Exception as e:
+        print(f"Text-to-speech error: {e}")
 
-# NLP processing for voice commands
+def cleanup_audio(filepath):
+    time.sleep(2)  
+    try:
+        os.remove(filepath)
+    except:
+        pass
+
 def process_command(command):
-    tokens = word_tokenize(command)
-    filtered_tokens = [word for word in tokens if word not in stopwords.words('english')]
+    if command in ["timeout", "unknown", "error"]:
+        return "I didn't catch that. Please try again."
     
-    # Check for add command
-    if any(word in filtered_tokens for word in ['add', 'need', 'want', 'buy', 'get']):
-        return add_item(command)
+    intent, item, qty, price_filter = parse_command(command)
     
-    # Check for remove command
-    elif any(word in filtered_tokens for word in ['remove', 'delete', 'drop']):
-        return remove_item(command)
-    
-    # Check for search command
-    elif any(word in filtered_tokens for word in ['find', 'search', 'look']):
-        return search_items(command)
-    
-    # Check for list command
-    elif any(word in filtered_tokens for word in ['list', 'show', 'what']):
+    if intent == "add" and item:
+        return add_item(item, qty)
+    elif intent == "remove" and item:
+        return remove_item(item)
+    elif intent == "show":
         return get_shopping_list()
+    elif intent == "find" and item:
+        return search_items(item, price_filter)
+    elif intent == "suggest":
+        return suggest_items()
+    elif intent == "clear":
+        return clear_list()
+    elif intent == "unknown":
+        if any(word in command for word in ["hello", "hi", "hey", "greetings"]):
+            return "Hello! How can I help with your shopping list today?"
+        
+        if any(word in command for word in ["thank", "thanks", "appreciate"]):
+            return "You're welcome! Is there anything else you need?"
+        
+        return "I'm not sure what you want to do. Try saying 'add milk' or 'what's on my list'."
     
-    else:
-        return "I'm not sure what you want to do. Try saying 'add milk' or 'remove eggs'."
+    return "I'm not sure what you want to do. Try saying 'add milk' or 'what's on my list'."
 
-# Add item to shopping list
-def add_item(command):
+def add_item(item_name, quantity):
     init_user_session()
     user_id = session['user_id']
-    
-    # Extract item and quantity from command
-    tokens = word_tokenize(command)
-    quantity = 1
-    item_words = []
-    
-    # Look for quantity indicators
-    for i, token in enumerate(tokens):
-        if token.isdigit():
-            quantity = int(token)
-        elif token in ['a', 'an']:
-            quantity = 1
-        else:
-            item_words.append(token)
-    
-    # Remove command words
-    command_words = ['add', 'need', 'want', 'buy', 'get', 'to', 'my', 'shopping', 'list']
-    item_name = ' '.join([word for word in item_words if word not in command_words])
     
     if not item_name:
         return "What would you like to add to your shopping list?"
     
-    # Categorize the item
     category = "uncategorized"
     for cat, items in shopping_data['products'].items():
-        if any(product in item_name for product in items):
+        if item_name in items:
             category = cat
             break
     
-    # Add to shopping list
+    shopping_list = shopping_data['users'][user_id]['shopping_list']
+    for item in shopping_list:
+        if item['name'] == item_name:
+            item['quantity'] += quantity
+            save_shopping_data()
+            response = f"Updated quantity of {item_name} to {item['quantity']} in your shopping list."
+            threading.Thread(target=text_to_speech, args=(response,)).start()
+            return response
+    
     new_item = {
         'name': item_name,
         'quantity': quantity,
@@ -174,68 +291,59 @@ def add_item(command):
     shopping_data['users'][user_id]['shopping_list'].append(new_item)
     save_shopping_data()
     
-    # Generate smart suggestions
     suggestions = generate_suggestions(item_name)
     
     response = f"Added {quantity} {item_name} to your shopping list."
     if suggestions:
         response += f" You might also need: {', '.join(suggestions[:3])}."
     
+    threading.Thread(target=text_to_speech, args=(response,)).start()
+    
     return response
 
-# Remove item from shopping list
-def remove_item(command):
+def remove_item(item_name):
     init_user_session()
     user_id = session['user_id']
-    
-    # Extract item from command
-    tokens = word_tokenize(command)
-    command_words = ['remove', 'delete', 'drop', 'from', 'my', 'shopping', 'list']
-    item_words = [word for word in tokens if word not in command_words]
-    item_name = ' '.join(item_words)
     
     if not item_name:
         return "What would you like to remove from your shopping list?"
     
-    # Find and remove the item
     shopping_list = shopping_data['users'][user_id]['shopping_list']
     removed = False
+    removed_item = None
     
     for i, item in enumerate(shopping_list):
-        if item_name in item['name']:
-            shopping_list.pop(i)
+        if item_name == item['name']:
+            removed_item = shopping_list.pop(i)
             removed = True
             break
     
     if removed:
         save_shopping_data()
-        return f"Removed {item_name} from your shopping list."
+        response = f"Removed {removed_item['name']} from your shopping list."
+        threading.Thread(target=text_to_speech, args=(response,)).start()
+        return response
     else:
         return f"I couldn't find {item_name} in your shopping list."
 
-# Search for items
-def search_items(command):
-    # Extract search terms from command
-    tokens = word_tokenize(command)
-    command_words = ['find', 'search', 'for', 'look', 'me']
-    search_terms = [word for word in tokens if word not in command_words]
-    
-    if not search_terms:
+def search_items(item_name, price_filter=None):
+    if not item_name:
         return "What would you like me to search for?"
     
-    # Simple search implementation
     results = []
     for category, items in shopping_data['products'].items():
         for item in items:
-            if any(term in item for term in search_terms):
+            if item_name in item:
                 results.append(item)
     
     if results:
-        return f"I found these items: {', '.join(results[:5])}."
+        response = f"I found these items: {', '.join(results[:5])}."
+        if price_filter:
+            response += f" Filtered to under ${price_filter}."
+        return response
     else:
         return "I couldn't find any items matching your search."
 
-# Get shopping list
 def get_shopping_list():
     init_user_session()
     user_id = session['user_id']
@@ -245,7 +353,6 @@ def get_shopping_list():
     if not shopping_list:
         return "Your shopping list is empty."
     
-    # Group by category
     categorized = {}
     for item in shopping_list:
         category = item['category']
@@ -257,27 +364,59 @@ def get_shopping_list():
     for category, items in categorized.items():
         response += f"{category}: {', '.join(items)}. "
     
+    threading.Thread(target=text_to_speech, args=(response,)).start()
+    
     return response
 
-# Generate smart suggestions
+def suggest_items():
+    init_user_session()
+    user_id = session['user_id']
+    
+    history = shopping_data['users'][user_id]['history']
+    if not history:
+        return "I don't have enough history to make suggestions yet."
+    
+
+    recent_items = [item['name'] for item in history[-3:]] if len(history) >= 3 else []
+    
+    if recent_items:
+        response = f"Based on your history, you might need: {', '.join(recent_items)}."
+        threading.Thread(target=text_to_speech, args=(response,)).start()
+        return response
+    else:
+        return "I don't have enough history to make suggestions yet."
+
+
+def clear_list():
+    init_user_session()
+    user_id = session['user_id']
+    shopping_data['users'][user_id]['shopping_list'] = []
+    save_shopping_data()
+    
+    response = "Shopping list cleared."
+    threading.Thread(target=text_to_speech, args=(response,)).start()
+    
+    return response
+
+
 def generate_suggestions(item_name):
     init_user_session()
     user_id = session['user_id']
     
     suggestions = []
     
-    # Suggest substitutes
+    
     for product, substitutes in shopping_data['substitutes'].items():
         if product in item_name:
             suggestions.extend(substitutes)
     
-    # Suggest items from the same category
+    
     for category, items in shopping_data['products'].items():
         if any(product in item_name for product in items):
-            # Add a few random items from the same category
+            
             suggestions.extend(random.sample(items, min(2, len(items))))
     
-    # Seasonal suggestions
+
     current_month = datetime.now().month
     if current_month in [12, 1, 2]:
         season = "winter"
@@ -290,25 +429,25 @@ def generate_suggestions(item_name):
     
     suggestions.extend(shopping_data['seasonal_items'][season])
     
-    # Remove duplicates and the original item
     suggestions = list(set(suggestions))
     if item_name in suggestions:
         suggestions.remove(item_name)
     
-    return suggestions[:5]  # Return top 5 suggestions
+    return suggestions[:5]  
 
-# Flask routes
+
 @app.route('/')
 def index():
     init_user_session()
     return render_template('index.html')
-
 @app.route('/voice-command', methods=['POST'])
 def voice_command():
-    command = recognize_speech()
-    if command.startswith("Sorry"):
-        return jsonify({'response': command})
-    
+    data = request.get_json()
+
+    audio_data = data.get("audio") if data else None
+
+    command = recognize_speech(audio_data)
+
     response = process_command(command)
     return jsonify({'response': response})
 
@@ -330,12 +469,12 @@ def get_list():
     return jsonify({'shopping_list': shopping_data['users'][user_id]['shopping_list']})
 
 @app.route('/clear-list', methods=['POST'])
-def clear_list():
-    init_user_session()
-    user_id = session['user_id']
-    shopping_data['users'][user_id]['shopping_list'] = []
-    save_shopping_data()
-    return jsonify({'response': "Shopping list cleared."})
+def clear_list_route():
+    return jsonify({'response': clear_list()})
 
 if __name__ == '__main__':
+    if not os.path.exists('audio'):
+        os.makedirs('audio')
+    if not os.path.exists('data'):
+        os.makedirs('data')
     app.run(debug=True, host='0.0.0.0', port=5000)
