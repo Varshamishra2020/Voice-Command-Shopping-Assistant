@@ -16,6 +16,10 @@ from nltk.tokenize import word_tokenize
 from nltk.corpus import stopwords
 import random
 import base64
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 try:
     nltk.data.find('tokenizers/punkt')
@@ -28,7 +32,7 @@ except LookupError:
     nltk.download('stopwords')
 
 app = Flask(__name__)
-app.secret_key = os.urandom(24)  
+app.secret_key = os.environ.get('SECRET_KEY', os.urandom(24))  
 
 NUMBER_WORDS = {
     "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
@@ -45,14 +49,56 @@ def init_shopping_data():
         data = {
             "users": {},
             "products": {
-                "dairy": ["milk", "cheese", "yogurt", "butter", "eggs"],
-                "produce": ["apples", "bananas", "oranges", "lettuce", "tomatoes", "carrots"],
-                "bakery": ["bread", "bagels", "croissants", "muffins"],
-                "meat": ["chicken", "beef", "fish", "pork"],
-                "snacks": ["chips", "cookies", "crackers", "popcorn"],
-                "beverages": ["water", "soda", "juice", "coffee", "tea"],
-                "frozen": ["ice cream", "frozen pizza", "frozen vegetables"],
-                "household": ["paper towels", "toilet paper", "cleaning supplies"]
+                "dairy": [
+                    {"name": "milk", "price": 3.99, "brands": ["Generic", "Organic Valley", "Horizon"]},
+                    {"name": "cheese", "price": 4.50, "brands": ["Kraft", "Sargento", "Generic"]},
+                    {"name": "yogurt", "price": 1.25, "brands": ["Chobani", "Yoplait", "Generic"]},
+                    {"name": "butter", "price": 3.25, "brands": ["Land O Lakes", "Generic"]},
+                    {"name": "eggs", "price": 2.99, "brands": ["Generic", "Organic", "Free Range"]}
+                ],
+                "produce": [
+                    {"name": "apples", "price": 1.99, "brands": ["Generic", "Organic"], "types": ["Red", "Green", "Gala"]},
+                    {"name": "bananas", "price": 0.59, "brands": ["Chiquita", "Dole", "Generic"]},
+                    {"name": "oranges", "price": 1.29, "brands": ["Generic", "Organic"]},
+                    {"name": "lettuce", "price": 1.99, "brands": ["Generic", "Organic"]},
+                    {"name": "tomatoes", "price": 2.49, "brands": ["Generic", "Organic", "Vine-Ripened"]},
+                    {"name": "carrots", "price": 1.19, "brands": ["Generic", "Organic"]}
+                ],
+                "bakery": [
+                    {"name": "bread", "price": 2.99, "brands": ["Wonder", "Sara Lee", "Generic"]},
+                    {"name": "bagels", "price": 3.49, "brands": ["Thomas", "Generic"]},
+                    {"name": "croissants", "price": 4.99, "brands": ["Generic"]},
+                    {"name": "muffins", "price": 3.99, "brands": ["Generic"]}
+                ],
+                "meat": [
+                    {"name": "chicken", "price": 5.99, "brands": ["Tyson", "Perdue", "Generic"]},
+                    {"name": "beef", "price": 7.99, "brands": ["Generic", "Organic"]},
+                    {"name": "fish", "price": 8.99, "brands": ["Generic", "Farmed", "Wild"]},
+                    {"name": "pork", "price": 6.49, "brands": ["Generic", "Organic"]}
+                ],
+                "snacks": [
+                    {"name": "chips", "price": 2.99, "brands": ["Lays", "Doritos", "Generic"]},
+                    {"name": "cookies", "price": 3.49, "brands": ["Oreo", "Chips Ahoy", "Generic"]},
+                    {"name": "crackers", "price": 2.79, "brands": ["Ritz", "Generic"]},
+                    {"name": "popcorn", "price": 1.99, "brands": ["Orville", "Generic"]}
+                ],
+                "beverages": [
+                    {"name": "water", "price": 0.99, "brands": ["Dasani", "Aquafina", "Generic"]},
+                    {"name": "soda", "price": 1.99, "brands": ["Coca-Cola", "Pepsi", "Generic"]},
+                    {"name": "juice", "price": 3.49, "brands": ["Tropicana", "Simply", "Generic"]},
+                    {"name": "coffee", "price": 5.99, "brands": ["Folgers", "Maxwell House", "Generic"]},
+                    {"name": "tea", "price": 3.29, "brands": ["Lipton", "Generic"]}
+                ],
+                "frozen": [
+                    {"name": "ice cream", "price": 4.99, "brands": ["Ben & Jerry's", "Breyers", "Generic"]},
+                    {"name": "frozen pizza", "price": 6.99, "brands": ["DiGiorno", "Tombstone", "Generic"]},
+                    {"name": "frozen vegetables", "price": 2.99, "brands": ["Birds Eye", "Generic"]}
+                ],
+                "household": [
+                    {"name": "paper towels", "price": 4.99, "brands": ["Bounty", "Generic"]},
+                    {"name": "toilet paper", "price": 5.99, "brands": ["Charmin", "Generic"]},
+                    {"name": "cleaning supplies", "price": 3.99, "brands": ["Clorox", "Lysol", "Generic"]}
+                ]
             },
             "substitutes": {
                 "milk": ["almond milk", "soy milk", "oat milk", "coconut milk"],
@@ -66,6 +112,12 @@ def init_shopping_data():
                 "spring": ["asparagus", "strawberries", "spinach", "peas"],
                 "summer": ["watermelon", "corn", "berries", "grill supplies"],
                 "fall": ["pumpkin", "apples", "squash", "cinnamon"]
+            },
+            "sales": {
+                "current": [
+                    {"item": "milk", "discount": 0.5, "until": "2023-12-31"},
+                    {"item": "bread", "discount": 0.3, "until": "2023-12-25"}
+                ]
             }
         }
         with open(data_file, 'w') as f:
@@ -105,46 +157,94 @@ def parse_quantity(text):
 def parse_command(command):
     c = command.lower()
     
+    # Multilingual support (basic)
+    multilingual_keywords = {
+        "add": ["add", "ajouter", "añadir", "hinzufügen", "添加", "追加"],
+        "remove": ["remove", "supprimer", "eliminar", "entfernen", "移除", "削除"],
+        "show": ["show", "afficher", "mostrar", "zeigen", "显示", "表示"],
+        "find": ["find", "trouver", "encontrar", "finden", "查找", "探す"],
+        "suggest": ["suggest", "suggerer", "sugerir", "vorschlagen", "建议", "提案"]
+    }
+    
+    # Check for multilingual commands
+    intent = "unknown"
+    for intent_key, keywords in multilingual_keywords.items():
+        if any(keyword in c for keyword in keywords):
+            intent = intent_key
+            break
+    
+    # If no multilingual match, try English
+    if intent == "unknown":
+        if "add" in c or "buy" in c or "need" in c or "want" in c or "get" in c:
+            intent = "add"
+        elif "remove" in c or "delete" in c or "drop" in c:
+            intent = "remove"
+        elif "show" in c or "list" in c or "what's on" in c:
+            intent = "show"
+        elif "find" in c or "search" in c or "look for" in c:
+            intent = "find"
+        elif "suggest" in c or "recommend" in c:
+            intent = "suggest"
+        elif "clear" in c or "empty" in c:
+            intent = "clear"
+    
+    # Extract quantity
     qty = parse_quantity(c)
     
-    if "add" in c or "buy" in c or "need" in c or "want" in c:
-        intent = "add"
-    elif "remove" in c or "delete" in c or "drop" in c:
-        intent = "remove"
-    elif "show" in c or "list" in c or "what's on" in c:
-        intent = "show"
-    elif "find" in c or "search" in c or "look for" in c:
-        intent = "find"
-    elif "suggest" in c or "recommend" in c:
-        intent = "suggest"
-    elif "clear" in c or "empty" in c:
-        intent = "clear"
-    else:
-        intent = "unknown"
-    
+    # Extract item with better matching
     item = None
+    brand = None
+    item_type = None
     
+    # First try exact matches with products
     for category, products in shopping_data['products'].items():
         for product in products:
-            if product in c:
-                item = product
+            product_name = product['name'] if isinstance(product, dict) else product
+            if product_name in c:
+                item = product_name
+                # Try to extract brand if available
+                if isinstance(product, dict) and 'brands' in product:
+                    for brand_option in product['brands']:
+                        if brand_option.lower() in c:
+                            brand = brand_option
+                # Try to extract type if available
+                if isinstance(product, dict) and 'types' in product:
+                    for type_option in product['types']:
+                        if type_option.lower() in c:
+                            item_type = type_option
                 break
         if item:
             break
     
+    # If no exact match, try fuzzy matching
     if not item:
         command_words = ["add", "remove", "delete", "buy", "get", "need", "want", 
                          "show", "list", "find", "search", "for", "my", "the", "shopping", "list"]
         words = [word for word in c.split() if word not in command_words and word not in NUMBER_WORDS]
         if words:
-            item = words[-1]
+            item = " ".join(words)
     
+    # Extract price filter
     price_filter = None
-    m = re.search(r"(under|below|less than)\s*\$?\s*([\d\.]+)", c)
-    if m:
-        price_filter = float(m.group(2))
+    price_patterns = [
+        r"(under|below|less than)\s*\$?\s*([\d\.]+)",
+        r"\$?([\d\.]+)\s*(and|\-|to)\s*\$?([\d\.]+)",
+        r"\$?([\d\.]+)\s*(or\s*)?(lower|less|cheaper)"
+    ]
     
-    return intent, item, qty, price_filter
+    for pattern in price_patterns:
+        m = re.search(pattern, c)
+        if m:
+            if "under" in pattern or "below" in pattern or "less than" in pattern:
+                price_filter = {"max": float(m.group(2))}
+            elif "and" in pattern or "-" in pattern or "to" in pattern:
+                price_filter = {"min": float(m.group(1)), "max": float(m.group(3))}
+            break
+    
+    # Extract organic preference
+    organic = "organic" in c
+    
+    return intent, item, qty, price_filter, brand, item_type, organic
 
 def convert_audio_to_wav(audio_data):
     try:
@@ -234,16 +334,16 @@ def process_command(command):
     if command in ["timeout", "unknown", "error"]:
         return "I didn't catch that. Please try again."
     
-    intent, item, qty, price_filter = parse_command(command)
+    intent, item, qty, price_filter, brand, item_type, organic = parse_command(command)
     
     if intent == "add" and item:
-        return add_item(item, qty)
+        return add_item(item, qty, brand, item_type, organic)
     elif intent == "remove" and item:
         return remove_item(item)
     elif intent == "show":
         return get_shopping_list()
     elif intent == "find" and item:
-        return search_items(item, price_filter)
+        return search_items(item, price_filter, brand, item_type, organic)
     elif intent == "suggest":
         return suggest_items()
     elif intent == "clear":
@@ -259,47 +359,97 @@ def process_command(command):
     
     return "I'm not sure what you want to do. Try saying 'add milk' or 'what's on my list'."
 
-def add_item(item_name, quantity):
+def add_item(item_name, quantity, brand=None, item_type=None, organic=False):
     init_user_session()
     user_id = session['user_id']
     
     if not item_name:
         return "What would you like to add to your shopping list?"
     
+    # Find category and product details
     category = "uncategorized"
-    for cat, items in shopping_data['products'].items():
-        if item_name in items:
-            category = cat
+    product_details = {}
+    
+    for cat, products in shopping_data['products'].items():
+        for product in products:
+            product_name = product['name'] if isinstance(product, dict) else product
+            if product_name == item_name:
+                category = cat
+                if isinstance(product, dict):
+                    product_details = product.copy()
+                break
+        if category != "uncategorized":
             break
     
+    # Check if item is already in list
     shopping_list = shopping_data['users'][user_id]['shopping_list']
     for item in shopping_list:
-        if item['name'] == item_name:
+        if (item['name'] == item_name and 
+            item.get('brand') == brand and 
+            item.get('type') == item_type and
+            item.get('organic') == organic):
             item['quantity'] += quantity
             save_shopping_data()
-            response = f"Updated quantity of {item_name} to {item['quantity']} in your shopping list."
+            response = f"Updated quantity of {format_item_name(item)} to {item['quantity']}."
             threading.Thread(target=text_to_speech, args=(response,)).start()
             return response
     
+    # Add new item
     new_item = {
         'name': item_name,
         'quantity': quantity,
         'category': category,
-        'added_on': datetime.now().isoformat()
+        'added_on': datetime.now().isoformat(),
+        'brand': brand,
+        'type': item_type,
+        'organic': organic
     }
     
+    # Add price if available
+    if 'price' in product_details:
+        new_item['price'] = product_details['price']
+    
     shopping_data['users'][user_id]['shopping_list'].append(new_item)
+    
+    # Add to history
+    history_item = new_item.copy()
+    history_item['added_on'] = datetime.now().isoformat()
+    shopping_data['users'][user_id]['history'].append(history_item)
+    
     save_shopping_data()
     
+    # Generate suggestions
     suggestions = generate_suggestions(item_name)
     
-    response = f"Added {quantity} {item_name} to your shopping list."
+    # Check for sales
+    sale_info = check_for_sales(item_name)
+    
+    response = f"Added {quantity} {format_item_name(new_item)} to your shopping list."
+    if sale_info:
+        response += f" {sale_info}"
     if suggestions:
         response += f" You might also need: {', '.join(suggestions[:3])}."
     
     threading.Thread(target=text_to_speech, args=(response,)).start()
     
     return response
+
+def format_item_name(item):
+    name_parts = []
+    if item.get('organic'):
+        name_parts.append("organic")
+    if item.get('brand'):
+        name_parts.append(item['brand'])
+    if item.get('type'):
+        name_parts.append(item['type'])
+    name_parts.append(item['name'])
+    return " ".join(name_parts)
+
+def check_for_sales(item_name):
+    for sale in shopping_data.get('sales', {}).get('current', []):
+        if sale['item'] == item_name:
+            return f"On sale: {sale['discount']*100}% off until {sale['until']}!"
+    return None
 
 def remove_item(item_name):
     init_user_session()
@@ -326,24 +476,46 @@ def remove_item(item_name):
     else:
         return f"I couldn't find {item_name} in your shopping list."
 
-def search_items(item_name, price_filter=None):
+def search_items(item_name, price_filter=None, brand=None, item_type=None, organic=False):
     if not item_name:
         return "What would you like me to search for?"
     
     results = []
-    for category, items in shopping_data['products'].items():
-        for item in items:
-            if item_name in item:
-                results.append(item)
+    for category, products in shopping_data['products'].items():
+        for product in products:
+            product_name = product['name'] if isinstance(product, dict) else product
+            
+            # Check if product matches search criteria
+            matches = item_name in product_name
+            if brand and isinstance(product, dict) and 'brands' in product:
+                matches = matches and brand in product['brands']
+            if item_type and isinstance(product, dict) and 'types' in product:
+                matches = matches and item_type in product['types']
+            if organic:
+                matches = matches and "organic" in product_name.lower()
+            
+            # Check price filter
+            if matches and price_filter and isinstance(product, dict) and 'price' in product:
+                price = product['price']
+                if 'max' in price_filter and price > price_filter['max']:
+                    matches = False
+                if 'min' in price_filter and price < price_filter['min']:
+                    matches = False
+            
+            if matches:
+                result = product_name
+                if isinstance(product, dict) and 'price' in product:
+                    result += f" (${product['price']})"
+                results.append(result)
     
     if results:
-        response = f"I found these items: {', '.join(results[:5])}."
-        if price_filter:
-            response += f" Filtered to under ${price_filter}."
+        response = f"I found {len(results)} items: {', '.join(results[:5])}."
+        if len(results) > 5:
+            response += f" And {len(results) - 5} more."
         return response
     else:
         return "I couldn't find any items matching your search."
-
+    
 def get_shopping_list():
     init_user_session()
     user_id = session['user_id']
@@ -405,18 +577,23 @@ def generate_suggestions(item_name):
     
     suggestions = []
     
-    
+    # Substitute suggestions
     for product, substitutes in shopping_data['substitutes'].items():
         if product in item_name:
             suggestions.extend(substitutes)
     
+    # Category-based suggestions
+    user_categories = set()
+    for item in shopping_data['users'][user_id]['shopping_list']:
+        user_categories.add(item['category'])
     
-    for category, items in shopping_data['products'].items():
-        if any(product in item_name for product in items):
-            
-            suggestions.extend(random.sample(items, min(2, len(items))))
+    for category in user_categories:
+        if category in shopping_data['products']:
+            category_items = [item['name'] if isinstance(item, dict) else item 
+                             for item in shopping_data['products'][category]]
+            suggestions.extend(random.sample(category_items, min(2, len(category_items))))
     
-
+    # Seasonal suggestions
     current_month = datetime.now().month
     if current_month in [12, 1, 2]:
         season = "winter"
@@ -429,25 +606,34 @@ def generate_suggestions(item_name):
     
     suggestions.extend(shopping_data['seasonal_items'][season])
     
+    # History-based suggestions (items frequently bought together)
+    history = shopping_data['users'][user_id].get('history', [])
+    if history:
+        # Simple algorithm: suggest items that were often added around the same time
+        recent_items = [item['name'] for item in history[-5:]] if len(history) >= 5 else []
+        suggestions.extend(recent_items)
+    
+    # Sales suggestions
+    for sale in shopping_data.get('sales', {}).get('current', []):
+        suggestions.append(sale['item'] + " (on sale!)")
+    
     suggestions = list(set(suggestions))
     if item_name in suggestions:
         suggestions.remove(item_name)
     
-    return suggestions[:5]  
-
+    return suggestions[:5]
 
 @app.route('/')
 def index():
     init_user_session()
     return render_template('index.html')
+
 @app.route('/voice-command', methods=['POST'])
 def voice_command():
     data = request.get_json()
-
     audio_data = data.get("audio") if data else None
 
     command = recognize_speech(audio_data)
-
     response = process_command(command)
     return jsonify({'response': response})
 

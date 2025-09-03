@@ -82,6 +82,31 @@
             ],
             "history": [],
             "preferences": {}
+        },
+        "1756878663396": {
+            "shopping_list": [
+                {
+                    "name": "oranges",
+                    "quantity": 1,
+                    "category": "produce",
+                    "added_on": "2025-09-03T11:21:13.329952",
+                    "brand": null,
+                    "type": null,
+                    "organic": false
+                }
+            ],
+            "history": [
+                {
+                    "name": "oranges",
+                    "quantity": 1,
+                    "category": "produce",
+                    "added_on": "2025-09-03T11:21:13.329952",
+                    "brand": null,
+                    "type": null,
+                    "organic": false
+                }
+            ],
+            "preferences": {}
         }
     },
     "products": {
