@@ -2,7 +2,7 @@
 
 A voice-based shopping list manager with smart suggestions built with Python and Flask.
 
-## Features
+## Features are
 
 - Voice input recognition for adding/removing items
 - Natural language processing for flexible commands
